@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualización de Aura Sensorial</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Panel de controles -->
+        <div id="controls-panel">
+            <h2>Control del Aura</h2>
+            
+            <div class="control-group">
+                <label>Temperatura (°C)</label>
+                <input type="range" id="temperature" min="0" max="40" value="20" step="0.5">
+                <span id="temp-value">20°C</span>
+            </div>
+
+            <div class="control-group">
+                <label>Peso (kg)</label>
+                <input type="range" id="weight" min="40" max="120" value="70" step="1">
+                <span id="weight-value">70kg</span>
+            </div>
+
+            <div class="control-group">
+                <label>Movimiento (%)</label>
+                <input type="range" id="movement" min="0" max="100" value="50" step="1">
+                <span id="movement-value">50%</span>
+            </div>
+
+            <div class="control-group">
+                <label>Altura (cm)</label>
+                <input type="range" id="height" min="150" max="200" value="170" step="1">
+                <span id="height-value">170cm</span>
+            </div>
+
+            <div class="control-group">
+                <label>Frecuencia Cardíaca (bpm)</label>
+                <input type="range" id="heartrate" min="60" max="120" value="80" step="1">
+                <span id="heartrate-value">80bpm</span>
+            </div>
+
+            <div class="control-group">
+                <label>Nivel de Sonido (%)</label>
+                <input type="range" id="sound" min="0" max="100" value="30" step="1">
+                <span id="sound-value">30%</span>
+            </div>
+
+            <div class="control-group">
+                <label>Proximidad</label>
+                <select id="proximity">
+                    <option value="isolated">Aislado</option>
+                    <option value="close" selected>Próximo</option>
+                    <option value="surrounded">Rodeado</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Postura</label>
+                <select id="posture">
+                    <option value="upright" selected>Erguido</option>
+                    <option value="hunched">Encorvado</option>
+                    <option value="relaxed">En reposo</option>
+                    <option value="tense">En tensión</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Intención Emocional</label>
+                <select id="emotion">
+                    <option value="impulsive">Impulsiva</option>
+                    <option value="reflective" selected>Reflexiva</option>
+                    <option value="contained">Contenida</option>
+                    <option value="expansive">Expansiva</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <button id="reset-btn">Reset</button>
+                <button id="save-btn">Guardar Aura</button>
+            </div>
+        </div>
+
+        <!-- Contenedor de la visualización 3D -->
+        <div id="canvas-container">
+            <canvas id="aura-canvas"></canvas>
+            <div id="loading">Cargando visualización...</div>
+        </div>
+
+        <!-- Información de controles -->
+        <div id="info-panel">
+            <p>🖱️ Click y arrastra para rotar | 🔄 Scroll para zoom</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/aura-system.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+/* Reset y estilos base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #000;
+    color: #fff;
+    overflow: hidden;
+    height: 100vh;
+}
+
+#app {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Panel de controles */
+#controls-panel {
+    width: 300px;
+    background: rgba(15, 15, 25, 0.95);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 20px;
+    overflow-y: auto;
+    z-index: 100;
+}
+
+#controls-panel h2 {
+    color: #ffffff;
+    margin-bottom: 25px;
+    text-align: center;
+    font-weight: 300;
+    font-size: 1.5em;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.control-group {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.control-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+    color: #ccc;
+    font-weight: 500;
+}
+
+.control-group input[type="range"] {
+    width: 100%;
+    margin: 10px 0;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: linear-gradient(90deg, #4a0e4e, #81069b, #a32cc4, #c44c93, #e66c7c);
+    border-radius: 3px;
+    outline: none;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    border: 2px solid #333;
+}
+
+.control-group input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    border: 2px solid #333;
+}
+
+.control-group select {
+    width: 100%;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #fff;
+    font-size: 0.9em;
+}
+
+.control-group select option {
+    background: #222;
+    color: #fff;
+}
+
+.control-group span {
+    float: right;
+    color: #81069b;
+    font-weight: bold;
+    font-size: 0.85em;
+}
+
+.control-group button {
+    width: 48%;
+    padding: 12px;
+    margin: 5px 1%;
+    background: linear-gradient(45deg, #4a0e4e, #81069b);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.control-group button:hover {
+    background: linear-gradient(45deg, #81069b, #a32cc4);
+    box-shadow: 0 4px 15px rgba(129, 6, 155, 0.3);
+    transform: translateY(-2px);
+}
+
+/* Contenedor del canvas */
+#canvas-container {
+    flex: 1;
+    position: relative;
+    background: radial-gradient(ellipse at center, #0a0a0f 0%, #000000 100%);
+}
+
+#aura-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+#aura-canvas:active {
+    cursor: grabbing;
+}
+
+/* Loading */
+#loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #81069b;
+    font-size: 1.2em;
+    text-align: center;
+    z-index: 10;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* Panel de información */
+#info-panel {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 15px;
+    border-radius: 6px;
+    font-size: 0.8em;
+    color: #ccc;
+    backdrop-filter: blur(5px);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    #controls-panel {
+        width: 250px;
+    }
+}
+
+@media (max-width: 768px) {
+    #app {
+        flex-direction: column;
+    }
+    
+    #controls-panel {
+        width: 100%;
+        height: 40vh;
+        order: 2;
+    }
+    
+    #canvas-container {
+        height: 60vh;
+        order: 1;
+    }
+    
+    #info-panel {
+        display: none;
+    }
+}
+
+/* Scrollbar personalizada */
+#controls-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+#controls-panel::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#controls-panel::-webkit-scrollbar-thumb {
+    background: #81069b;
+    border-radius: 3px;
+}
+
+#controls-panel::-webkit-scrollbar-thumb:hover {
+    background: #a32cc4;
+}
