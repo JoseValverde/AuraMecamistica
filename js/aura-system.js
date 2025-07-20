@@ -277,22 +277,71 @@ class AuraSystem {
     }
     
     updateParams(newParams) {
-        // Actualizar parámetros y regenerar partículas si es necesario
-        const needsReset = 
-            this.params.temperature !== newParams.temperature ||
-            this.params.weight !== newParams.weight ||
-            this.params.height !== newParams.height ||
-            this.params.emotion !== newParams.emotion ||
-            this.params.proximity !== newParams.proximity;
-            
+        const oldParams = { ...this.params };
         this.params = { ...this.params, ...newParams };
         
-        if (needsReset) {
+        // Solo resetear si cambian parámetros que afectan la ESTRUCTURA de las partículas
+        const structuralChanges = 
+            oldParams.emotion !== newParams.emotion ||      // Cambia la forma geométrica
+            oldParams.proximity !== newParams.proximity ||  // Cambia la escala general
+            oldParams.posture !== newParams.posture;        // Cambia la transformación de forma
+            
+        // Estos parámetros solo afectan colores o necesitan recalcular posiciones objetivo
+        const needsTargetUpdate =
+            oldParams.temperature !== newParams.temperature ||  // Solo afecta colores
+            oldParams.weight !== newParams.weight ||           // Afecta densidad/radio
+            oldParams.height !== newParams.height;             // Afecta tamaño
+        
+        if (structuralChanges) {
+            // Reset completo: nueva distribución de partículas
             this.resetParticles();
             this.updateBufferAttributes();
+            AuraUtils.debugLog('Reset estructural de partículas', { reason: 'structural changes' });
+        } else if (needsTargetUpdate) {
+            // Solo actualizar posiciones objetivo sin resetear partículas actuales
+            this.updateTargetPositionsOnly();
+            AuraUtils.debugLog('Actualización de objetivos', { reason: 'target update' });
         }
         
-        AuraUtils.debugLog('Parámetros actualizados', this.params);
+        // Los parámetros de movimiento, sonido y heartRate no necesitan ningún reset
+        // Se aplican directamente en el loop de animación
+        
+        AuraUtils.debugLog('Parámetros actualizados', {
+            structural: structuralChanges,
+            targetUpdate: needsTargetUpdate,
+            params: this.params
+        });
+    }
+    
+    updateTargetPositionsOnly() {
+        // Actualizar solo las posiciones objetivo sin resetear las partículas actuales
+        const baseRadius = AuraUtils.mapRange(this.params.height, 150, 200, 1.5, 2.5);
+        const densityFactor = AuraUtils.mapRange(this.params.weight, 40, 120, 0.7, 1.3);
+        
+        // Actualizar colores si cambió la temperatura
+        const baseColorHSL = AuraUtils.getTemperatureColor(this.params.temperature);
+        const colorVariations = AuraUtils.generateColorVariations(baseColorHSL, 10);
+        
+        for (let i = 0; i < this.particleCount; i++) {
+            const i3 = i * 3;
+            
+            // Recalcular posición objetivo
+            const newTarget = this.calculateStructuredPosition(i, baseRadius * densityFactor);
+            this.targetPositions[i3] = newTarget.x;
+            this.targetPositions[i3 + 1] = newTarget.y;
+            this.targetPositions[i3 + 2] = newTarget.z;
+            
+            // Actualizar colores gradualmente
+            const colorIndex = Math.floor(Math.random() * colorVariations.length);
+            const newColor = colorVariations[colorIndex];
+            
+            // Interpolar colores suavemente
+            this.colors[i3] += (newColor.r - this.colors[i3]) * 0.1;
+            this.colors[i3 + 1] += (newColor.g - this.colors[i3 + 1]) * 0.1;
+            this.colors[i3 + 2] += (newColor.b - this.colors[i3 + 2]) * 0.1;
+        }
+        
+        this.updateBufferAttributes();
     }
     
     updateBufferAttributes() {
