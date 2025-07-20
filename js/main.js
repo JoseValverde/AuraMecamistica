@@ -12,6 +12,28 @@ class AuraVisualization {
         this.canvas = document.getElementById('aura-canvas');
         this.loadingElement = document.getElementById('loading');
         
+        // Panel de información
+        this.infoPanel = document.getElementById('info-panel');
+        this.infoToggle = document.getElementById('info-toggle');
+        this.infoElements = {
+            cameraPos: document.getElementById('camera-pos'),
+            cameraDist: document.getElementById('camera-dist'),
+            cameraRot: document.getElementById('camera-rot'),
+            temp: document.getElementById('info-temp'),
+            movement: document.getElementById('info-movement'),
+            emotion: document.getElementById('info-emotion'),
+            heartrate: document.getElementById('info-heartrate'),
+            fps: document.getElementById('info-fps'),
+            particles: document.getElementById('info-particles'),
+            time: document.getElementById('info-time'),
+            orbitalSpeed: document.getElementById('info-orbital-speed')
+        };
+        
+        // Estado del panel
+        this.infoPanelCollapsed = false;
+        this.frameCount = 0;
+        this.lastTime = Date.now();
+        
         // Controles UI
         this.controls_ui = {
             temperature: document.getElementById('temperature'),
@@ -82,14 +104,32 @@ class AuraVisualization {
         this.renderer.setSize(container.clientWidth, container.clientHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         
-        // Configurar controles de órbita
+        // Configurar controles de órbita con configuración más restrictiva
         this.controls = new THREE.OrbitControls(this.camera, this.canvas);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
         this.controls.enableZoom = true;
-        this.controls.enablePan = false;
+        this.controls.enablePan = false; // CRÍTICO: Desactivar desplazamiento lateral
+        this.controls.enableRotate = true;
         this.controls.maxDistance = 10;
         this.controls.minDistance = 2;
+        
+        // Configuraciones adicionales para evitar desplazamiento
+        this.controls.screenSpacePanning = false; // Desactivar panning en espacio de pantalla
+        this.controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: null // Desactivar botón derecho para evitar pan
+        };
+        
+        // Fijar el objetivo (target) al centro
+        this.controls.target.set(0, 0, 0);
+        this.controls.update();
+        
+        // Guardar referencia al target original para forzarlo
+        this.originalTarget = new THREE.Vector3(0, 0, 0);
+        
+        console.log('🎯 Controles configurados - Pan:', this.controls.enablePan, 'Target:', this.controls.target);
         
         // Añadir iluminación ambiental sutil
         const ambientLight = new THREE.AmbientLight(0x404040, 0.1);
@@ -139,6 +179,9 @@ class AuraVisualization {
         
         resetBtn?.addEventListener('click', () => this.resetToDefaults());
         saveBtn?.addEventListener('click', () => this.saveCurrentAura());
+        
+        // Panel de información
+        this.infoToggle?.addEventListener('click', () => this.toggleInfoPanel());
         
         // Redimensionar ventana
         window.addEventListener('resize', () => this.onWindowResize());
@@ -222,11 +265,96 @@ class AuraVisualization {
         this.updateDisplayValues();
         this.updateAuraParameters();
         
-        // Resetear cámara
+        // Resetear cámara al centro
         this.camera.position.set(0, 0, 5);
-        this.controls.reset();
+        // El target ya está bloqueado al centro, solo necesitamos update
+        this.controls.update();
         
         console.log('🔄 Parámetros restaurados a valores por defecto');
+    }
+    
+    toggleInfoPanel() {
+        this.infoPanelCollapsed = !this.infoPanelCollapsed;
+        
+        if (this.infoPanelCollapsed) {
+            this.infoPanel.classList.add('collapsed');
+            this.infoToggle.textContent = '📊';
+        } else {
+            this.infoPanel.classList.remove('collapsed');
+            this.infoToggle.textContent = '×';
+        }
+    }
+    
+    updateInfoPanel() {
+        if (this.infoPanelCollapsed) return;
+        
+        // Actualizar información de cámara
+        const camPos = this.camera.position;
+        if (this.infoElements.cameraPos) {
+            this.infoElements.cameraPos.textContent = 
+                `${camPos.x.toFixed(1)}, ${camPos.y.toFixed(1)}, ${camPos.z.toFixed(1)}`;
+        }
+        
+        const distance = Math.sqrt(camPos.x * camPos.x + camPos.y * camPos.y + camPos.z * camPos.z);
+        if (this.infoElements.cameraDist) {
+            this.infoElements.cameraDist.textContent = distance.toFixed(1);
+        }
+        
+        // Calcular rotación aproximada
+        const rotY = Math.atan2(camPos.x, camPos.z) * (180 / Math.PI);
+        const rotX = Math.atan2(camPos.y, Math.sqrt(camPos.x * camPos.x + camPos.z * camPos.z)) * (180 / Math.PI);
+        if (this.infoElements.cameraRot) {
+            this.infoElements.cameraRot.textContent = `${rotX.toFixed(0)}°, ${rotY.toFixed(0)}°`;
+        }
+        
+        // Actualizar configuración actual
+        if (this.infoElements.temp) {
+            this.infoElements.temp.textContent = `${this.controls_ui.temperature?.value || 20}°C`;
+        }
+        if (this.infoElements.movement) {
+            this.infoElements.movement.textContent = `${this.controls_ui.movement?.value || 50}%`;
+        }
+        if (this.infoElements.emotion) {
+            const emotionMap = {
+                'impulsive': 'Impulsiva',
+                'reflective': 'Reflexiva',
+                'contained': 'Contenida',
+                'expansive': 'Expansiva'
+            };
+            this.infoElements.emotion.textContent = emotionMap[this.controls_ui.emotion?.value] || 'Reflexiva';
+        }
+        if (this.infoElements.heartrate) {
+            this.infoElements.heartrate.textContent = `${this.controls_ui.heartrate?.value || 80} bpm`;
+        }
+        
+        // Actualizar estado de animación
+        const currentTime = Date.now();
+        this.frameCount++;
+        
+        // Calcular FPS cada segundo
+        if (currentTime - this.lastTime >= 1000) {
+            const fps = Math.round((this.frameCount * 1000) / (currentTime - this.lastTime));
+            if (this.infoElements.fps) {
+                this.infoElements.fps.textContent = fps.toString();
+            }
+            this.frameCount = 0;
+            this.lastTime = currentTime;
+        }
+        
+        if (this.infoElements.particles) {
+            this.infoElements.particles.textContent = '2000';
+        }
+        
+        if (this.auraSystem && this.infoElements.time) {
+            this.infoElements.time.textContent = `${this.auraSystem.time.toFixed(1)}s`;
+        }
+        
+        // Velocidad orbital basada en movimiento
+        if (this.infoElements.orbitalSpeed) {
+            const movement = parseFloat(this.controls_ui.movement?.value || 50);
+            const speed = (movement / 50).toFixed(1);
+            this.infoElements.orbitalSpeed.textContent = `${speed}x`;
+        }
     }
     
     saveCurrentAura() {
@@ -295,10 +423,18 @@ class AuraVisualization {
         // Actualizar controles
         this.controls.update();
         
+        // Forzar que el target siempre esté en el centro
+        if (!this.controls.target.equals(this.originalTarget)) {
+            this.controls.target.copy(this.originalTarget);
+        }
+        
         // Actualizar sistema de aura
         if (this.auraSystem) {
             this.auraSystem.animate(deltaTime);
         }
+        
+        // Actualizar panel de información
+        this.updateInfoPanel();
         
         // Renderizar escena
         this.renderer.render(this.scene, this.camera);

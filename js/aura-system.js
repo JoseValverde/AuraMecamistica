@@ -319,10 +319,9 @@ class AuraSystem {
         const soundAmplitude = AuraUtils.mapRange(this.params.sound, 0, 100, 0, 0.3);
         const heartPulse = Math.sin(this.pulseTime * Math.PI * 2) * 0.1 + 1;
         
-        // Actualizar posiciones objetivo si es necesario
-        if (this.time % 10 < deltaTime) { // Cada 10 segundos aproximadamente
-            this.updateTargetPositions();
-        }
+        // Rotación continua y suave de toda la estructura
+        const rotationSpeed = 0.05; // Velocidad de rotación más suave
+        const globalRotY = this.time * rotationSpeed;
         
         for (let i = 0; i < this.particleCount; i++) {
             const i3 = i * 3;
@@ -330,10 +329,15 @@ class AuraSystem {
             // Actualizar fase individual de cada partícula
             this.particlePhases[i] += deltaTime * movementSpeed * (0.5 + Math.random() * 0.5);
             
-            // Posición objetivo actual
-            const targetX = this.targetPositions[i3];
-            const targetY = this.targetPositions[i3 + 1];
-            const targetZ = this.targetPositions[i3 + 2];
+            // Posición objetivo actual con rotación continua
+            const baseTargetX = this.targetPositions[i3];
+            const baseTargetY = this.targetPositions[i3 + 1];
+            const baseTargetZ = this.targetPositions[i3 + 2];
+            
+            // Aplicar rotación suave y continua a la posición objetivo
+            const targetX = baseTargetX * Math.cos(globalRotY) - baseTargetZ * Math.sin(globalRotY);
+            const targetY = baseTargetY;
+            const targetZ = baseTargetX * Math.sin(globalRotY) + baseTargetZ * Math.cos(globalRotY);
             
             // Radio de órbita dinámico
             const currentOrbitRadius = this.orbitRadii[i] * orbitIntensity;
@@ -387,27 +391,6 @@ class AuraSystem {
         }
         
         this.updateBufferAttributes();
-    }
-    
-    updateTargetPositions() {
-        // Recalcular posiciones objetivo para variación dinámica
-        const baseRadius = AuraUtils.mapRange(this.params.height, 150, 200, 1.5, 2.5);
-        const densityFactor = AuraUtils.mapRange(this.params.weight, 40, 120, 0.7, 1.3);
-        
-        for (let i = 0; i < this.particleCount; i++) {
-            const i3 = i * 3;
-            const newTarget = this.calculateStructuredPosition(i, baseRadius * densityFactor);
-            
-            // Rotación lenta de toda la estructura
-            const rotationSpeed = 0.1;
-            const rotY = this.time * rotationSpeed;
-            const rotatedX = newTarget.x * Math.cos(rotY) - newTarget.z * Math.sin(rotY);
-            const rotatedZ = newTarget.x * Math.sin(rotY) + newTarget.z * Math.cos(rotY);
-            
-            this.targetPositions[i3] = rotatedX;
-            this.targetPositions[i3 + 1] = newTarget.y;
-            this.targetPositions[i3 + 2] = rotatedZ;
-        }
     }
     
     getVertexShader() {

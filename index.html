@@ -89,9 +89,79 @@
             <div id="loading">Cargando visualización...</div>
         </div>
 
-        <!-- Información de controles -->
+        <!-- Información de controles expandida -->
         <div id="info-panel">
-            <p>🖱️ Click y arrastra para rotar | 🔄 Scroll para zoom</p>
+            <div id="info-header">
+                <span id="info-title">Información del Sistema</span>
+                <button id="info-toggle">×</button>
+            </div>
+            <div id="info-content">
+                <div class="info-section">
+                    <h4>📹 Cámara</h4>
+                    <div class="info-item">
+                        <span class="info-label">Posición:</span>
+                        <span class="info-value" id="camera-pos">0, 0, 5</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Distancia:</span>
+                        <span class="info-value" id="camera-dist">5.0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Rotación:</span>
+                        <span class="info-value" id="camera-rot">0°, 0°</span>
+                    </div>
+                </div>
+                
+                <div class="info-section">
+                    <h4>🎛️ Configuración Actual</h4>
+                    <div class="info-item">
+                        <span class="info-label">Temperatura:</span>
+                        <span class="info-value" id="info-temp">20°C</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Movimiento:</span>
+                        <span class="info-value" id="info-movement">50%</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Forma:</span>
+                        <span class="info-value" id="info-emotion">Reflexiva</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Ritmo cardíaco:</span>
+                        <span class="info-value" id="info-heartrate">80 bpm</span>
+                    </div>
+                </div>
+                
+                <div class="info-section">
+                    <h4>⚡ Estado de Animación</h4>
+                    <div class="info-item">
+                        <span class="info-label">FPS:</span>
+                        <span class="info-value" id="info-fps">60</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Partículas:</span>
+                        <span class="info-value" id="info-particles">2000</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Tiempo:</span>
+                        <span class="info-value" id="info-time">0.0s</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Velocidad orbital:</span>
+                        <span class="info-value" id="info-orbital-speed">1.0x</span>
+                    </div>
+                </div>
+                
+                <div class="info-section">
+                    <h4>🎮 Controles</h4>
+                    <div class="info-controls">
+                        🖱️ Click y arrastra para rotar<br>
+                        🔄 Scroll para zoom<br>
+                        ⌨️ Espacio: pausar/reanudar<br>
+                        ⌨️ Ctrl+R: resetear valores
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
