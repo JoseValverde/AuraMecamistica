@@ -41,30 +41,45 @@ function hslToThreeColor(hsl) {
     return color;
 }
 
-// Generar color basado en temperatura
+// Stops HSL para mapa de temperatura (Opción A extendida con rojo intenso final)
+// t en °C, h en [0-360), s,l en %
+const TEMP_COLOR_STOPS = [
+    { t: 0,  h: 250, s: 85, l: 40 }, // azul violáceo frío extremo
+    { t: 10, h: 220, s: 80, l: 45 }, // azul medio
+    { t: 20, h: 190, s: 70, l: 50 }, // cian
+    { t: 28, h: 150, s: 65, l: 48 }, // verde-turquesa transición
+    { t: 34, h: 55,  s: 90, l: 55 }, // amarillo cálido
+    { t: 37, h: 30,  s: 95, l: 55 }, // naranja
+    { t: 40, h: 10,  s: 88, l: 50 }, // rojo anaranjado
+    { t: 42, h: 0,   s: 90, l: 45 }  // rojo intenso final
+];
+
+// Generar color basado en temperatura con múltiples stops
 function getTemperatureColor(temp) {
-    // Mapear temperatura (0-40°C) a colores fríos/cálidos
-    const coldColor = { h: 240, s: 80, l: 50 }; // Azul
-    const neutralColor = { h: 180, s: 60, l: 50 }; // Cian
-    const warmColor = { h: 30, s: 90, l: 60 }; // Naranja/Rojo
-    
-    if (temp <= 20) {
-        const factor = temp / 20;
-        return interpolateHSL(coldColor, neutralColor, factor);
-    } else {
-        const factor = (temp - 20) / 20;
-        return interpolateHSL(neutralColor, warmColor, factor);
+    // Clamp de temperatura al rango soportado
+    const clamped = Math.max(TEMP_COLOR_STOPS[0].t, Math.min(temp, TEMP_COLOR_STOPS[TEMP_COLOR_STOPS.length - 1].t));
+    // Buscar intervalo
+    for (let i = 0; i < TEMP_COLOR_STOPS.length - 1; i++) {
+        const a = TEMP_COLOR_STOPS[i];
+        const b = TEMP_COLOR_STOPS[i + 1];
+        if (clamped <= b.t) {
+            const span = b.t - a.t;
+            const f = span === 0 ? 0 : (clamped - a.t) / span;
+            return interpolateHSL(a, b, f);
+        }
     }
+    return TEMP_COLOR_STOPS[TEMP_COLOR_STOPS.length - 1];
 }
 
 // Generar variaciones de color para partículas
 function generateColorVariations(baseColor, count = 5) {
     const colors = [];
     for (let i = 0; i < count; i++) {
+        // Reducir dispersión de matiz para mantener lectura del gradiente térmico
         const variation = {
-            h: (baseColor.h + (Math.random() - 0.5) * 60) % 360,
-            s: Math.max(20, Math.min(100, baseColor.s + (Math.random() - 0.5) * 30)),
-            l: Math.max(20, Math.min(80, baseColor.l + (Math.random() - 0.5) * 40))
+            h: (baseColor.h + (Math.random() - 0.5) * 25 + 360) % 360,
+            s: Math.max(25, Math.min(100, baseColor.s + (Math.random() - 0.5) * 20)),
+            l: Math.max(25, Math.min(75, baseColor.l + (Math.random() - 0.5) * 25))
         };
         colors.push(hslToThreeColor(variation));
     }

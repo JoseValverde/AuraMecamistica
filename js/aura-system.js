@@ -1,12 +1,14 @@
 // Sistema de partículas para el aura
 class AuraSystem {
-    constructor() {
+    constructor(options = {}) {
         this.particles = null;
         this.particleCount = 2000;
         this.positions = new Float32Array(this.particleCount * 3);
         this.velocities = new Float32Array(this.particleCount * 3);
         this.colors = new Float32Array(this.particleCount * 3);
         this.sizes = new Float32Array(this.particleCount);
+        // Radio de esfera de contorno (sincronizado con main.js)
+        this.sphereRadius = options.sphereRadius ?? (window.AURA_SPHERE_RADIUS ?? 8); // usa constante global
         
         // Parámetros del aura
         this.params = {
@@ -32,6 +34,21 @@ class AuraSystem {
         this.particlePhases = new Float32Array(this.particleCount);
         // Radios de órbita individuales
         this.orbitRadii = new Float32Array(this.particleCount);
+    // Semilla por partícula para variaciones emocionales
+    this.emotionSeeds = new Float32Array(this.particleCount);
+    for (let i = 0; i < this.particleCount; i++) this.emotionSeeds[i] = Math.random();
+    // Perfiles emocionales (transición suave)
+    this.currentEmotionProfile = this.getEmotionProfile(this.params.emotion);
+    this.targetEmotionProfile = { ...this.currentEmotionProfile };
+    this.emotionTransitionT = 1; // 1 => sin transición en curso
+    this.EMOTION_TRANSITION_DURATION = 1.8; // segundos para fundido
+    // Fase acumulativa para modulación emocional (evita saltos al cambiar waveSpeed)
+    this.emotionPhase = 0;
+    // Suavizado de intensidad orbital (para transiciones de emoción)
+    this.smoothedOrbitIntensity = null;
+    // Ángulo de rotación global acumulativo (evita salto proporcional al tiempo al cambiar velocidad)
+    this.globalRotationAngle = 0;
+    this.smoothedRotationSpeed = null; // para suavizar cambios de velocidad de rotación
         
         this.init();
     }
@@ -62,9 +79,8 @@ class AuraSystem {
             vertexColors: true
         });
         
-        // Crear sistema de partículas
-        this.particles = new THREE.Points(geometry, material);
-        
+    // Crear sistema de partículas
+    this.particles = new THREE.Points(geometry, material);
         AuraUtils.debugLog('Sistema de partículas inicializado', {
             particleCount: this.particleCount,
             morphState: this.morphState
@@ -91,56 +107,48 @@ class AuraSystem {
     }
     
     resetParticles() {
-        // Generar color base según temperatura
+        // Colores base según temperatura
         const baseColorHSL = AuraUtils.getTemperatureColor(this.params.temperature);
         const colorVariations = AuraUtils.generateColorVariations(baseColorHSL, 10);
-        
-        // Calcular radio base según altura y peso
-        const baseRadius = AuraUtils.mapRange(this.params.height, 150, 200, 1.5, 2.5);
-        const densityFactor = AuraUtils.mapRange(this.params.weight, 40, 120, 0.7, 1.3);
-        
-        for (let i = 0; i < this.particleCount; i++) {
+        const N = this.particleCount;
+        const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+        for (let i = 0; i < N; i++) {
             const i3 = i * 3;
-            
-            // Calcular posición objetivo estructurada (centro de órbita)
-            let targetPosition = this.calculateStructuredPosition(i, baseRadius * densityFactor);
-            
-            // Guardar posición objetivo
+            // Fibonacci sphere
+            const k = (i + 0.5);
+            const y = 1 - (2 * k) / N;
+            const r = Math.sqrt(Math.max(0, 1 - y * y));
+            const phi = i * goldenAngle;
+            const x = Math.cos(phi) * r;
+            const z = Math.sin(phi) * r;
+            const targetPosition = new THREE.Vector3(x, y, z).multiplyScalar(this.sphereRadius);
             this.targetPositions[i3] = targetPosition.x;
             this.targetPositions[i3 + 1] = targetPosition.y;
             this.targetPositions[i3 + 2] = targetPosition.z;
-            
-            // Fase inicial aleatoria para cada partícula
+            // Fase y órbita
             this.particlePhases[i] = Math.random() * Math.PI * 2;
-            
-            // Radio de órbita individual
-            this.orbitRadii[i] = 0.1 + Math.random() * 0.3;
-            
-            // Posición inicial: cerca del objetivo pero con desplazamiento aleatorio
-            const orbitOffset = new THREE.Vector3(
-                (Math.random() - 0.5) * this.orbitRadii[i] * 2,
-                (Math.random() - 0.5) * this.orbitRadii[i] * 2,
-                (Math.random() - 0.5) * this.orbitRadii[i] * 2
-            );
-            
-            this.positions[i3] = targetPosition.x + orbitOffset.x;
-            this.positions[i3 + 1] = targetPosition.y + orbitOffset.y;
-            this.positions[i3 + 2] = targetPosition.z + orbitOffset.z;
-            
-            // Velocidades iniciales para órbita
-            this.velocities[i3] = (Math.random() - 0.5) * 0.01;
-            this.velocities[i3 + 1] = (Math.random() - 0.5) * 0.01;
-            this.velocities[i3 + 2] = (Math.random() - 0.5) * 0.01;
-            
-            // Color de partícula con variación sutil
+            this.orbitRadii[i] = 0.15 + Math.random() * 0.25;
+            // Pequeño jitter tangencial inicial
+            const radial = targetPosition.clone().normalize();
+            const tangentA = new THREE.Vector3(-radial.z, 0, radial.x).normalize();
+            const tangentB = new THREE.Vector3().crossVectors(radial, tangentA).normalize();
+            const jitter = tangentA.multiplyScalar((Math.random() - 0.5) * 0.4)
+                .add(tangentB.multiplyScalar((Math.random() - 0.5) * 0.4));
+            const start = radial.multiplyScalar(this.sphereRadius).add(jitter);
+            this.positions[i3] = start.x;
+            this.positions[i3 + 1] = start.y;
+            this.positions[i3 + 2] = start.z;
+            // Velocidad base mínima
+            this.velocities[i3] = (Math.random() - 0.5) * 0.003;
+            this.velocities[i3 + 1] = (Math.random() - 0.5) * 0.003;
+            this.velocities[i3 + 2] = (Math.random() - 0.5) * 0.003;
+            // Color y tamaño
             const colorIndex = Math.floor(Math.random() * colorVariations.length);
             const color = colorVariations[colorIndex];
             this.colors[i3] = color.r;
             this.colors[i3 + 1] = color.g;
             this.colors[i3 + 2] = color.b;
-            
-            // Tamaño de partícula variable
-            this.sizes[i] = Math.random() * 0.6 + 0.3;
+            this.sizes[i] = Math.random() * 0.5 + 0.35;
         }
     }
     
@@ -148,7 +156,11 @@ class AuraSystem {
         const particlesPerLayer = Math.floor(this.particleCount / 8); // 8 capas
         const layer = Math.floor(index / particlesPerLayer);
         const indexInLayer = index % particlesPerLayer;
-        
+            const newTarget = new THREE.Vector3(
+                this.targetPositions[i3],
+                this.targetPositions[i3 + 1],
+                this.targetPositions[i3 + 2]
+            );
         // Ángulo base para esta partícula
         const baseAngle = (indexInLayer / particlesPerLayer) * Math.PI * 2;
         const layerRadius = radius * (0.3 + layer * 0.15); // Capas concéntricas
@@ -280,11 +292,10 @@ class AuraSystem {
         const oldParams = { ...this.params };
         this.params = { ...this.params, ...newParams };
         
-        // Solo resetear si cambian parámetros que afectan la ESTRUCTURA de las partículas
+        // Solo resetear si cambian parámetros que afectarían distribución base (mantenemos emoción en la misma esfera)
         const structuralChanges = 
-            oldParams.emotion !== newParams.emotion ||      // Cambia la forma geométrica
-            oldParams.proximity !== newParams.proximity ||  // Cambia la escala general
-            oldParams.posture !== newParams.posture;        // Cambia la transformación de forma
+            oldParams.proximity !== newParams.proximity ||  // Escala general
+            oldParams.posture !== newParams.posture;        // Transformación de forma global
             
         // Estos parámetros solo afectan colores o necesitan recalcular posiciones objetivo
         const needsTargetUpdate =
@@ -292,6 +303,11 @@ class AuraSystem {
             oldParams.weight !== newParams.weight ||           // Afecta densidad/radio
             oldParams.height !== newParams.height;             // Afecta tamaño
         
+        if (oldParams.emotion !== newParams.emotion) {
+            // Iniciar transición hacia nuevo perfil
+            this.targetEmotionProfile = this.getEmotionProfile(this.params.emotion);
+            this.emotionTransitionT = 0; // reiniciar progreso
+        }
         if (structuralChanges) {
             // Reset completo: nueva distribución de partículas
             this.resetParticles();
@@ -312,35 +328,65 @@ class AuraSystem {
             params: this.params
         });
     }
+
+    getEmotionProfile(emotion) {
+        switch (emotion) {
+            case 'impulsive':
+                return {
+                    orbitMultiplier: 1.4,
+                    noiseMultiplier: 2.2,
+                    tangentialWaveAmp: 0.28,
+                    waveSpeed: 2.2,
+                    radialJitter: 0.20,
+                    shellThickness: 0.35,
+                    pulseMultiplier: 1.25
+                };
+            case 'expansive':
+                return {
+                    orbitMultiplier: 1.2,
+                    noiseMultiplier: 1.3,
+                    tangentialWaveAmp: 0.18,
+                    waveSpeed: 1.1,
+                    radialJitter: 0.15,
+                    shellThickness: 0.25,
+                    pulseMultiplier: 1.15
+                };
+            case 'contained':
+                return {
+                    orbitMultiplier: 0.7,
+                    noiseMultiplier: 0.6,
+                    tangentialWaveAmp: 0.10,
+                    waveSpeed: 0.9,
+                    radialJitter: 0.05,
+                    shellThickness: 0.05,
+                    pulseMultiplier: 0.85
+                };
+            case 'reflective':
+            default:
+                return {
+                    orbitMultiplier: 0.9,
+                    noiseMultiplier: 0.8,
+                    tangentialWaveAmp: 0.12,
+                    waveSpeed: 0.6,
+                    radialJitter: 0.07,
+                    shellThickness: 0.12,
+                    pulseMultiplier: 1.0
+                };
+        }
+    }
     
     updateTargetPositionsOnly() {
-        // Actualizar solo las posiciones objetivo sin resetear las partículas actuales
-        const baseRadius = AuraUtils.mapRange(this.params.height, 150, 200, 1.5, 2.5);
-        const densityFactor = AuraUtils.mapRange(this.params.weight, 40, 120, 0.7, 1.3);
-        
-        // Actualizar colores si cambió la temperatura
+        // Solo refrescar colores (las posiciones ya están fijadas a la esfera)
         const baseColorHSL = AuraUtils.getTemperatureColor(this.params.temperature);
         const colorVariations = AuraUtils.generateColorVariations(baseColorHSL, 10);
-        
         for (let i = 0; i < this.particleCount; i++) {
             const i3 = i * 3;
-            
-            // Recalcular posición objetivo
-            const newTarget = this.calculateStructuredPosition(i, baseRadius * densityFactor);
-            this.targetPositions[i3] = newTarget.x;
-            this.targetPositions[i3 + 1] = newTarget.y;
-            this.targetPositions[i3 + 2] = newTarget.z;
-            
-            // Actualizar colores gradualmente
             const colorIndex = Math.floor(Math.random() * colorVariations.length);
             const newColor = colorVariations[colorIndex];
-            
-            // Interpolar colores suavemente
-            this.colors[i3] += (newColor.r - this.colors[i3]) * 0.1;
-            this.colors[i3 + 1] += (newColor.g - this.colors[i3 + 1]) * 0.1;
-            this.colors[i3 + 2] += (newColor.b - this.colors[i3 + 2]) * 0.1;
+            this.colors[i3] += (newColor.r - this.colors[i3]) * 0.08;
+            this.colors[i3 + 1] += (newColor.g - this.colors[i3 + 1]) * 0.08;
+            this.colors[i3 + 2] += (newColor.b - this.colors[i3 + 2]) * 0.08;
         }
-        
         this.updateBufferAttributes();
     }
     
@@ -362,15 +408,48 @@ class AuraSystem {
         // Actualizar uniforms del shader
         this.particles.material.uniforms.time.value = this.time;
         
-        // Parámetros de movimiento
-        const movementSpeed = AuraUtils.mapRange(this.params.movement, 0, 100, 0.5, 3.0);
-        const orbitIntensity = AuraUtils.mapRange(this.params.movement, 0, 100, 0.8, 2.5);
+        // Interpolación de perfil emocional
+        if (this.emotionTransitionT < 1) {
+            this.emotionTransitionT += deltaTime / this.EMOTION_TRANSITION_DURATION;
+            if (this.emotionTransitionT > 1) this.emotionTransitionT = 1;
+        }
+        const tEase = this.emotionTransitionT < 1 ? (1 - Math.cos(this.emotionTransitionT * Math.PI)) / 2 : 1; // easeInOutCosine
+        const blend = (a, b) => a + (b - a) * tEase;
+    const activeProfile = {
+            orbitMultiplier: blend(this.currentEmotionProfile.orbitMultiplier, this.targetEmotionProfile.orbitMultiplier),
+            noiseMultiplier: blend(this.currentEmotionProfile.noiseMultiplier, this.targetEmotionProfile.noiseMultiplier),
+            tangentialWaveAmp: blend(this.currentEmotionProfile.tangentialWaveAmp, this.targetEmotionProfile.tangentialWaveAmp),
+            waveSpeed: blend(this.currentEmotionProfile.waveSpeed, this.targetEmotionProfile.waveSpeed),
+            radialJitter: blend(this.currentEmotionProfile.radialJitter, this.targetEmotionProfile.radialJitter),
+            shellThickness: blend(this.currentEmotionProfile.shellThickness, this.targetEmotionProfile.shellThickness),
+            pulseMultiplier: blend(this.currentEmotionProfile.pulseMultiplier, this.targetEmotionProfile.pulseMultiplier)
+        };
+        // Cuando termina la transición fijar el perfil actual
+        if (this.emotionTransitionT === 1 && this.currentEmotionProfile !== this.targetEmotionProfile) {
+            this.currentEmotionProfile = { ...this.targetEmotionProfile };
+        }
+        // Parámetros de movimiento base
+        const movementSpeedBase = AuraUtils.mapRange(this.params.movement, 0, 100, 0.5, 3.0);
+        const orbitIntensityBase = AuraUtils.mapRange(this.params.movement, 0, 100, 0.8, 2.5);
         const soundAmplitude = AuraUtils.mapRange(this.params.sound, 0, 100, 0, 0.3);
-        const heartPulse = Math.sin(this.pulseTime * Math.PI * 2) * 0.1 + 1;
+        const heartPulse = (Math.sin(this.pulseTime * Math.PI * 2) * 0.1 + 1) * activeProfile.pulseMultiplier;
+        const movementSpeed = movementSpeedBase * activeProfile.orbitMultiplier;
+    const orbitIntensity = orbitIntensityBase * activeProfile.orbitMultiplier;
+    // Inicializar suavizado si es la primera vez
+    if (this.smoothedOrbitIntensity === null) this.smoothedOrbitIntensity = orbitIntensity;
+    // Lerp exponencial para cambio suave (evita salto de volumen al cambiar emoción)
+    const smoothingFactor = 0.01; // 0.1 ~ responde en ~10-12 frames
+    this.smoothedOrbitIntensity += (orbitIntensity - this.smoothedOrbitIntensity) * smoothingFactor;
         
-        // Rotación continua y suave de toda la estructura
-        const rotationSpeed = 0.05; // Velocidad de rotación más suave
-        const globalRotY = this.time * rotationSpeed;
+    // Rotación continua incremental (elimina salto grande al cambiar emoción)
+    const rotationSpeedTarget = 0.05 * activeProfile.orbitMultiplier; // velocidad objetivo
+    if (this.smoothedRotationSpeed === null) this.smoothedRotationSpeed = rotationSpeedTarget;
+    const rotSmoothFactor = 0.15; // suavizado de velocidad angular
+    this.smoothedRotationSpeed += (rotationSpeedTarget - this.smoothedRotationSpeed) * rotSmoothFactor;
+    this.globalRotationAngle += deltaTime * this.smoothedRotationSpeed;
+    const globalRotY = this.globalRotationAngle;
+    // Avanzar fase emocional acumulativa (independiente del cambio de waveSpeed)
+    this.emotionPhase += deltaTime * activeProfile.waveSpeed;
         
         for (let i = 0; i < this.particleCount; i++) {
             const i3 = i * 3;
@@ -389,7 +468,7 @@ class AuraSystem {
             const targetZ = baseTargetX * Math.sin(globalRotY) + baseTargetZ * Math.cos(globalRotY);
             
             // Radio de órbita dinámico
-            const currentOrbitRadius = this.orbitRadii[i] * orbitIntensity;
+            const currentOrbitRadius = this.orbitRadii[i] * this.smoothedOrbitIntensity;
             
             // Movimiento orbital en múltiples dimensiones
             const orbitX = Math.cos(this.particlePhases[i]) * currentOrbitRadius;
@@ -400,16 +479,51 @@ class AuraSystem {
             const breathPhase = this.time * 0.5 + i * 0.1;
             const breathRadius = Math.sin(breathPhase) * currentOrbitRadius * 0.5;
             
-            // Posición final combinada
+            // Posición base combinada previa a modulación emocional
             let finalX = targetX + orbitX + breathRadius * Math.cos(breathPhase * 2);
             let finalY = targetY + orbitY + breathRadius * Math.sin(breathPhase * 1.7);
             let finalZ = targetZ + orbitZ + breathRadius * Math.cos(breathPhase * 2.3);
+
+            // Modulación emocional (tangencial + radial) manteniendo superficie
+            const dirLen = Math.sqrt(targetX*targetX + targetY*targetY + targetZ*targetZ) || 1;
+            const nx = targetX / dirLen;
+            const ny = targetY / dirLen;
+            const nz = targetZ / dirLen;
+            // Tangentes ortogonales
+            let tx = -nz, ty = 0, tz = nx; // primer tangente aproximada
+            const tLen = Math.sqrt(tx*tx + ty*ty + tz*tz) || 1; tx/=tLen; ty/=tLen; tz/=tLen;
+            // segunda tangente
+            let ux = ny*tz - nz*ty;
+            let uy = nz*tx - nx*tz;
+            let uz = nx*ty - ny*tx;
+            const uLen = Math.sqrt(ux*ux + uy*uy + uz*uz) || 1; ux/=uLen; uy/=uLen; uz/=uLen;
+            const seed = this.emotionSeeds[i];
+            const wavePhase = this.emotionPhase + seed * Math.PI * 2; // fase continua sin saltos
+            const tangentialA = Math.sin(wavePhase) * activeProfile.tangentialWaveAmp;
+            const tangentialB = Math.cos(wavePhase * 0.7 + seed) * activeProfile.tangentialWaveAmp * 0.7;
+            finalX += tx * tangentialA + ux * tangentialB;
+            finalY += ty * tangentialA + uy * tangentialB;
+            finalZ += tz * tangentialA + uz * tangentialB;
+            // Jitter radial controlado
+            const radialWave = Math.sin(wavePhase * 1.3) * activeProfile.radialJitter;
+            // Para 'impulsive' añadir destellos rápidos (spikes)
+            if (this.params.emotion === 'impulsive') {
+                const spike = Math.pow(Math.max(0, Math.sin(this.time * 10 + seed * 20)), 3) * activeProfile.shellThickness;
+                finalX += nx * spike;
+                finalY += ny * spike;
+                finalZ += nz * spike;
+            }
+            // Proyección para mantener superficie con grosor limitado
+            const desiredRadius = this.sphereRadius + radialWave * activeProfile.shellThickness;
+            const fLen = Math.sqrt(finalX*finalX + finalY*finalY + finalZ*finalZ) || 1;
+            const scale = desiredRadius / fLen;
+            finalX *= scale; finalY *= scale; finalZ *= scale;
             
             // Añadir ruido orgánico
             const noiseTime = this.time * 2 + i * 0.01;
-            finalX += Math.sin(noiseTime * 3.1) * 0.05 * movementSpeed;
-            finalY += Math.cos(noiseTime * 2.7) * 0.05 * movementSpeed;
-            finalZ += Math.sin(noiseTime * 3.5) * 0.05 * movementSpeed;
+            finalX += Math.sin(noiseTime * 3.1) * 0.05 * movementSpeed * activeProfile.noiseMultiplier;
+            finalY += Math.cos(noiseTime * 2.7) * 0.05 * movementSpeed * activeProfile.noiseMultiplier;
+            finalZ += Math.sin(noiseTime * 3.5) * 0.05 * movementSpeed * activeProfile.noiseMultiplier;
             
             // Interpolación suave hacia la nueva posición
             const lerpFactor = 0.1;

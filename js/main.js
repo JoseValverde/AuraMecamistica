@@ -114,7 +114,8 @@ class AuraVisualization {
         this.controls.enableZoom = true;
     this.controls.enablePan = true; // Evitar desplazamiento lateral que movería el centro
         this.controls.enableRotate = true;
-        this.controls.maxDistance = 10;
+    // Eliminar límite superior de zoom (permitir alejarse libremente)
+    this.controls.maxDistance = Infinity;
         this.controls.minDistance = 0;
         
     // Permitir rotación vertical y horizontal (evitar pasar polos exactos)
@@ -163,7 +164,7 @@ class AuraVisualization {
 
     addEnvironmentSphere() {
         if (this.environmentSphere) return; // evitar duplicados
-        const radius = 8; // amplitud solicitada
+        const radius = window.AURA_SPHERE_RADIUS; // valor centralizado
         const sphereGeo = new THREE.SphereGeometry(radius, 32, 24);
         const wireGeo = new THREE.WireframeGeometry(sphereGeo);
         const material = new THREE.LineBasicMaterial({
@@ -181,7 +182,7 @@ class AuraVisualization {
     }
     
     initAuraSystem() {
-        this.auraSystem = new AuraSystem();
+    this.auraSystem = new AuraSystem({ sphereRadius: window.AURA_SPHERE_RADIUS });
         const particleSystem = this.auraSystem.getParticleSystem();
         
         if (particleSystem) {
@@ -251,7 +252,9 @@ class AuraVisualization {
         const sound = this.controls_ui.sound?.value;
         
         if (this.valueDisplays.temperature && temp) {
-            this.valueDisplays.temperature.textContent = `${temp}°C`;
+            const numeric = parseFloat(temp);
+            const label = numeric >= 42 ? `${numeric}°C (máx)` : `${numeric}°C`;
+            this.valueDisplays.temperature.textContent = label;
         }
         if (this.valueDisplays.weight && weight) {
             this.valueDisplays.weight.textContent = `${weight}kg`;
@@ -357,7 +360,8 @@ class AuraVisualization {
         
         // Actualizar configuración actual
         if (this.infoElements.temp) {
-            this.infoElements.temp.textContent = `${this.controls_ui.temperature?.value || 20}°C`;
+            const tVal = parseFloat(this.controls_ui.temperature?.value || 20);
+            this.infoElements.temp.textContent = tVal >= 42 ? `${tVal}°C (máx)` : `${tVal}°C`;
         }
         if (this.infoElements.movement) {
             this.infoElements.movement.textContent = `${this.controls_ui.movement?.value || 50}%`;
