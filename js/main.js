@@ -92,7 +92,7 @@ class AuraVisualization {
         const aspect = container.clientWidth / container.clientHeight;
         
         this.camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-        this.camera.position.set(0, 0, 5);
+        this.camera.position.set(0, 0, 0); // Fijar Z en 0
         
         // Configurar renderer
         this.renderer = new THREE.WebGLRenderer({
@@ -113,6 +113,10 @@ class AuraVisualization {
         this.controls.enableRotate = true;
         this.controls.maxDistance = 10;
         this.controls.minDistance = 2;
+        
+        // Restringir movimiento para mantener cámara en plano Z=0
+        this.controls.maxPolarAngle = Math.PI / 2; // Solo movimiento horizontal
+        this.controls.minPolarAngle = Math.PI / 2; // Bloquear movimiento vertical
         
         // Configuraciones adicionales para evitar desplazamiento
         this.controls.screenSpacePanning = false; // Desactivar panning en espacio de pantalla
@@ -266,7 +270,7 @@ class AuraVisualization {
         this.updateAuraParameters();
         
         // Resetear cámara al centro
-        this.camera.position.set(0, 0, 5);
+        this.camera.position.set(0, 0, 0); // Fijar Z en 0
         // El target ya está bloqueado al centro, solo necesitamos update
         this.controls.update();
         
@@ -422,6 +426,9 @@ class AuraVisualization {
         
         // Actualizar controles
         this.controls.update();
+        
+        // Forzar que la posición Z de la cámara siempre sea 0
+        this.camera.position.z = 0;
         
         // Forzar que el target siempre esté en el centro
         if (!this.controls.target.equals(this.originalTarget)) {
