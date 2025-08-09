@@ -91,8 +91,10 @@ class AuraVisualization {
         const container = document.getElementById('canvas-container');
         const aspect = container.clientWidth / container.clientHeight;
         
-        this.camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-        this.camera.position.set(0, 0, 0); // Fijar Z en 0
+    this.camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+    // IMPORTANTE: para poder rotar (panorámica) la cámara NO puede coincidir con el target.
+    // Colocamos la cámara a un radio fijo sobre el plano Y=0 para permitir rotación horizontal.
+    this.camera.position.set(0, 0, 0.1);
         
         // Configurar renderer
         this.renderer = new THREE.WebGLRenderer({
@@ -109,14 +111,14 @@ class AuraVisualization {
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
         this.controls.enableZoom = true;
-        this.controls.enablePan = false; // CRÍTICO: Desactivar desplazamiento lateral
+    this.controls.enablePan = false; // Evitar desplazamiento lateral que movería el centro
         this.controls.enableRotate = true;
         this.controls.maxDistance = 10;
-        this.controls.minDistance = 2;
+        this.controls.minDistance = 0;
         
-        // Restringir movimiento para mantener cámara en plano Z=0
-        this.controls.maxPolarAngle = Math.PI / 2; // Solo movimiento horizontal
-        this.controls.minPolarAngle = Math.PI / 2; // Bloquear movimiento vertical
+    // Restringir movimiento para mantener panorámica horizontal (sin inclinación vertical)
+    this.controls.maxPolarAngle = Math.PI / 2; // Ecuador
+    this.controls.minPolarAngle = Math.PI / 2; // Ecuador
         
         // Configuraciones adicionales para evitar desplazamiento
         this.controls.screenSpacePanning = false; // Desactivar panning en espacio de pantalla
@@ -130,8 +132,8 @@ class AuraVisualization {
         this.controls.target.set(0, 0, 0);
         this.controls.update();
         
-        // Guardar referencia al target original para forzarlo
-        this.originalTarget = new THREE.Vector3(0, 0, 0);
+    // Guardar referencia al target original (centro estable)
+    this.originalTarget = new THREE.Vector3(0, 0, 0);
         
         console.log('🎯 Controles configurados - Pan:', this.controls.enablePan, 'Target:', this.controls.target);
         
@@ -269,9 +271,9 @@ class AuraVisualization {
         this.updateDisplayValues();
         this.updateAuraParameters();
         
-        // Resetear cámara al centro
-        this.camera.position.set(0, 0, 0); // Fijar Z en 0
-        // El target ya está bloqueado al centro, solo necesitamos update
+    // Resetear cámara a la posición orbital inicial
+    this.camera.position.set(0, 0, 0.1);
+    // El target permanece en el centro
         this.controls.update();
         
         console.log('🔄 Parámetros restaurados a valores por defecto');
@@ -427,13 +429,8 @@ class AuraVisualization {
         // Actualizar controles
         this.controls.update();
         
-        // Forzar que la posición Z de la cámara siempre sea 0
-        this.camera.position.z = 0;
-        
-        // Forzar que el target siempre esté en el centro
-        if (!this.controls.target.equals(this.originalTarget)) {
-            this.controls.target.copy(this.originalTarget);
-        }
+    // Asegurar que el target siga en el centro (por seguridad si algún ajuste externo lo cambiara)
+    if (!this.controls.target.equals(this.originalTarget)) this.controls.target.copy(this.originalTarget);
         
         // Actualizar sistema de aura
         if (this.auraSystem) {
