@@ -7,6 +7,8 @@ class AuraVisualization {
         this.controls = null;
         this.auraSystem = null;
         this.animationId = null;
+    this.baseAngles = null; // Rotación inicial para mostrar valores relativos 0°,0°
+    this.environmentSphere = null; // Esfera envolvente
         
         // Elementos del DOM
         this.canvas = document.getElementById('aura-canvas');
@@ -92,9 +94,8 @@ class AuraVisualization {
         const aspect = container.clientWidth / container.clientHeight;
         
     this.camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-    // IMPORTANTE: para poder rotar (panorámica) la cámara NO puede coincidir con el target.
-    // Colocamos la cámara a un radio fijo sobre el plano Y=0 para permitir rotación horizontal.
-    this.camera.position.set(0, 0, 0.1);
+    // Colocar la cámara a un radio suficiente para órbita libre (horizontal y vertical)
+    this.camera.position.set(0,0.1,0.1);
         
         // Configurar renderer
         this.renderer = new THREE.WebGLRenderer({
@@ -111,14 +112,14 @@ class AuraVisualization {
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
         this.controls.enableZoom = true;
-    this.controls.enablePan = false; // Evitar desplazamiento lateral que movería el centro
+    this.controls.enablePan = true; // Evitar desplazamiento lateral que movería el centro
         this.controls.enableRotate = true;
         this.controls.maxDistance = 10;
         this.controls.minDistance = 0;
         
-    // Restringir movimiento para mantener panorámica horizontal (sin inclinación vertical)
-    this.controls.maxPolarAngle = Math.PI / 2; // Ecuador
-    this.controls.minPolarAngle = Math.PI / 2; // Ecuador
+    // Permitir rotación vertical y horizontal (evitar pasar polos exactos)
+    this.controls.minPolarAngle = 0.2;             // Límite superior (0 sería polo)
+    this.controls.maxPolarAngle = Math.PI - 0.2;   // Límite inferior (π sería polo opuesto)
         
         // Configuraciones adicionales para evitar desplazamiento
         this.controls.screenSpacePanning = false; // Desactivar panning en espacio de pantalla
@@ -136,15 +137,47 @@ class AuraVisualization {
     this.originalTarget = new THREE.Vector3(0, 0, 0);
         
         console.log('🎯 Controles configurados - Pan:', this.controls.enablePan, 'Target:', this.controls.target);
+
+        // Añadir esfera envolvente centrada en la cámara (dome)
+        this.addEnvironmentSphere();
+        // Asegurar que la cámara (con la esfera hija) esté en la escena
+        if (!this.scene.children.includes(this.camera)) {
+            this.scene.add(this.camera);
+        }
         
         // Añadir iluminación ambiental sutil
         const ambientLight = new THREE.AmbientLight(0x404040, 0.1);
         this.scene.add(ambientLight);
         
+        // Alinear orientación inicial EXACTAMENTE igual que en reset
+        if (!this.initialCameraRadius) this.initialCameraRadius = 0.14;
+        if (typeof this.setCameraOrientationDeg === 'function') {
+            this.setCameraOrientationDeg(0, 90, this.initialCameraRadius);
+        }
+
         AuraUtils.debugLog('Three.js inicializado', {
             resolution: `${container.clientWidth}x${container.clientHeight}`,
             pixelRatio: this.renderer.getPixelRatio()
         });
+    }
+
+    addEnvironmentSphere() {
+        if (this.environmentSphere) return; // evitar duplicados
+        const radius = 8; // amplitud solicitada
+        const sphereGeo = new THREE.SphereGeometry(radius, 32, 24);
+        const wireGeo = new THREE.WireframeGeometry(sphereGeo);
+        const material = new THREE.LineBasicMaterial({
+            color: 0x4fa3ff,
+            transparent: true,
+            opacity: 0.35,
+            depthWrite: false,
+            depthTest: false
+        });
+        this.environmentSphere = new THREE.LineSegments(wireGeo, material);
+        // Añadir a la escena (seguirá la posición de la cámara en animate sin rotar con ella)
+        this.environmentSphere.frustumCulled = false; // evitar que desaparezca por culling
+    this.environmentSphere.position.set(0,0,0); // fija en el origen
+    this.scene.add(this.environmentSphere);
     }
     
     initAuraSystem() {
@@ -168,7 +201,7 @@ class AuraVisualization {
     }
     
     initEventListeners() {
-        // Controles de rango (sliders)
+    // Controles de rango (sliders)
         Object.keys(this.controls_ui).forEach(key => {
             const control = this.controls_ui[key];
             if (control) {
@@ -178,8 +211,7 @@ class AuraVisualization {
                 });
             }
         });
-        
-        // Botones
+
         const resetBtn = document.getElementById('reset-btn');
         const saveBtn = document.getElementById('save-btn');
         
@@ -271,8 +303,8 @@ class AuraVisualization {
         this.updateDisplayValues();
         this.updateAuraParameters();
         
-    // Resetear cámara a la posición orbital inicial
-    this.camera.position.set(0, 0, 0.1);
+    // Resetear cámara a la posición orbital inicial (radio y ligera elevación)
+    this.setCameraOrientationDeg(0, 90, this.initialCameraRadius);
     // El target permanece en el centro
         this.controls.update();
         
@@ -307,10 +339,20 @@ class AuraVisualization {
         }
         
         // Calcular rotación aproximada
-        const rotY = Math.atan2(camPos.x, camPos.z) * (180 / Math.PI);
-        const rotX = Math.atan2(camPos.y, Math.sqrt(camPos.x * camPos.x + camPos.z * camPos.z)) * (180 / Math.PI);
+        let rawRotY = Math.atan2(camPos.x, camPos.z) * (180 / Math.PI);
+        let rawRotX = Math.atan2(camPos.y, Math.sqrt(camPos.x * camPos.x + camPos.z * camPos.z)) * (180 / Math.PI);
+        // Inicializar ángulos base una vez
+        if (!this.baseAngles) {
+            this.baseAngles = { x: rawRotX, y: rawRotY };
+        }
+        // Ángulos relativos para mostrar 0°,0° en orientación inicial
+        let relX = rawRotX - this.baseAngles.x;
+        let relY = rawRotY - this.baseAngles.y;
+        // Normalizar a rango [-180,180]
+        relX = ((relX + 180) % 360) - 180;
+        relY = ((relY + 180) % 360) - 180;
         if (this.infoElements.cameraRot) {
-            this.infoElements.cameraRot.textContent = `${rotX.toFixed(0)}°, ${rotY.toFixed(0)}°`;
+            this.infoElements.cameraRot.textContent = `${relX.toFixed(0)}°, ${relY.toFixed(0)}°`;
         }
         
         // Actualizar configuración actual
@@ -322,10 +364,10 @@ class AuraVisualization {
         }
         if (this.infoElements.emotion) {
             const emotionMap = {
-                'impulsive': 'Impulsiva',
-                'reflective': 'Reflexiva',
-                'contained': 'Contenida',
-                'expansive': 'Expansiva'
+                'impulsiva': 'Impulsiva',
+                'reflexiva': 'Reflexiva',
+                'contenida': 'Contenida',
+                'expansiva': 'Expansiva'
             };
             this.infoElements.emotion.textContent = emotionMap[this.controls_ui.emotion?.value] || 'Reflexiva';
         }
@@ -421,6 +463,21 @@ class AuraVisualization {
         AuraUtils.debugLog('Ventana redimensionada', { width, height });
     }
     
+    setCameraOrientationDeg(azimuthDeg, polarDeg, radius) {
+        // azimuth: 0° mira hacia -Z si colocamos cámara sobre eje Z positivo (ajustamos a convención Three)
+        const az = THREE.Math.degToRad(azimuthDeg);
+        const pol = THREE.Math.degToRad(polarDeg);
+        const r = radius || this.initialCameraRadius || 0.14;
+        const target = this.controls ? this.controls.target : new THREE.Vector3(0,0,0);
+        const sinPol = Math.sin(pol);
+        const x = r * sinPol * Math.sin(az);
+        const y = r * Math.cos(pol);
+        const z = r * sinPol * Math.cos(az);
+        this.camera.position.set(target.x + x, target.y + y, target.z + z);
+        this.camera.lookAt(target);
+        if (this.controls) this.controls.update();
+    }
+    
     animate() {
         this.animationId = requestAnimationFrame(() => this.animate());
         
@@ -431,6 +488,8 @@ class AuraVisualization {
         
     // Asegurar que el target siga en el centro (por seguridad si algún ajuste externo lo cambiara)
     if (!this.controls.target.equals(this.originalTarget)) this.controls.target.copy(this.originalTarget);
+
+    // Esfera ambiental fija en el origen (opción A): no se actualiza posición.
         
         // Actualizar sistema de aura
         if (this.auraSystem) {
