@@ -2,7 +2,7 @@
 class AuraSystem {
     constructor(options = {}) {
         this.particles = null;
-        this.particleCount = 2000;
+        this.particleCount = 4000;
         this.positions = new Float32Array(this.particleCount * 3);
         this.velocities = new Float32Array(this.particleCount * 3);
         this.colors = new Float32Array(this.particleCount * 3);
@@ -30,6 +30,8 @@ class AuraSystem {
         
         // Posiciones objetivo para cada partícula (estructura base)
         this.targetPositions = new Float32Array(this.particleCount * 3);
+    // Posiciones base (distribución fija en la esfera) para recalcular transformaciones suaves
+    this.baseTargetPositions = new Float32Array(this.particleCount * 3);
         // Fases individuales para cada partícula
         this.particlePhases = new Float32Array(this.particleCount);
         // Radios de órbita individuales
@@ -125,6 +127,10 @@ class AuraSystem {
             this.targetPositions[i3] = targetPosition.x;
             this.targetPositions[i3 + 1] = targetPosition.y;
             this.targetPositions[i3 + 2] = targetPosition.z;
+            // Guardar copia base
+            this.baseTargetPositions[i3] = targetPosition.x;
+            this.baseTargetPositions[i3 + 1] = targetPosition.y;
+            this.baseTargetPositions[i3 + 2] = targetPosition.z;
             // Fase y órbita
             this.particlePhases[i] = Math.random() * Math.PI * 2;
             this.orbitRadii[i] = 0.15 + Math.random() * 0.25;
@@ -281,10 +287,21 @@ class AuraSystem {
     }
     
     getProximityScale() {
-        switch(this.params.proximity) {
+        const prox = arguments.length ? arguments[0] : this.params.proximity;
+        switch(prox) {
             case 'isolated': return 1.3;
             case 'surrounded': return 0.7;
             default: return 1.0; // 'close'
+        }
+    }
+
+    // Escalas por postura (factores independientes para cada eje)
+    postureScale(posture) {
+        switch(posture) {
+            case 'hunched': return { x: 1.2, y: 0.6, z: 1.2 };
+            case 'relaxed': return { x: 1.1, y: 0.8, z: 1.1 };
+            case 'tense': return { x: 0.8, y: 1.3, z: 0.8 };
+            default: return { x: 1.0, y: 1.0, z: 1.0 }; // upright
         }
     }
     
@@ -309,10 +326,30 @@ class AuraSystem {
             this.emotionTransitionT = 0; // reiniciar progreso
         }
         if (structuralChanges) {
-            // Reset completo: nueva distribución de partículas
-            this.resetParticles();
-            this.updateBufferAttributes();
-            AuraUtils.debugLog('Reset estructural de partículas', { reason: 'structural changes' });
+            // Iniciar transición suave sin reconstruir distribución base
+            const fromProx = this.getProximityScale(oldParams.proximity);
+            const toProx = this.getProximityScale(this.params.proximity);
+            const fromPosture = oldParams.posture;
+            const toPosture = this.params.posture;
+            // Si ya había una transición, tomar su estado interpolado como nuevo origen
+            if (this.shapeTransition && this.shapeTransition.current) {
+                const c = this.shapeTransition.current;
+                // Convertir estado actual a factores de inicio
+                this.shapeTransition = null;
+                // Usar c como origen real
+                this.prevShapeState = { prox: c.prox, postureScale: c.postureScale };
+            }
+            const originScale = this.prevShapeState ? this.prevShapeState.postureScale : this.postureScale(fromPosture);
+            const originProx = this.prevShapeState ? this.prevShapeState.prox : fromProx;
+            this.shapeTransition = {
+                t: 0,
+                duration: 1.0, // segundos de transición
+                from: { prox: originProx, posture: fromPosture, scale: originScale },
+                to: { prox: toProx, posture: toPosture, scale: this.postureScale(toPosture) },
+                current: null
+            };
+            delete this.prevShapeState;
+            AuraUtils.debugLog('Transición postura/proximidad iniciada', { fromPosture, toPosture, fromProx, toProx });
         } else if (needsTargetUpdate) {
             // Solo actualizar posiciones objetivo sin resetear partículas actuales
             this.updateTargetPositionsOnly();
@@ -412,6 +449,48 @@ class AuraSystem {
         if (this.emotionTransitionT < 1) {
             this.emotionTransitionT += deltaTime / this.EMOTION_TRANSITION_DURATION;
             if (this.emotionTransitionT > 1) this.emotionTransitionT = 1;
+        }
+
+        // Transición suave de postura / proximidad
+        if (this.shapeTransition) {
+            this.shapeTransition.t += deltaTime / this.shapeTransition.duration;
+            if (this.shapeTransition.t > 1) this.shapeTransition.t = 1;
+            const tt = this.shapeTransition.t;
+            const ease = (1 - Math.cos(tt * Math.PI)) / 2; // easeInOutCosine
+            const from = this.shapeTransition.from;
+            const to = this.shapeTransition.to;
+            const prox = from.prox + (to.prox - from.prox) * ease;
+            const sx = from.scale.x + (to.scale.x - from.scale.x) * ease;
+            const sy = from.scale.y + (to.scale.y - from.scale.y) * ease;
+            const sz = from.scale.z + (to.scale.z - from.scale.z) * ease;
+            this.shapeTransition.current = { prox, postureScale: { x: sx, y: sy, z: sz } };
+            // Recalcular targetPositions desde base
+            for (let i = 0; i < this.particleCount; i++) {
+                const i3 = i * 3;
+                const bx = this.baseTargetPositions[i3];
+                const by = this.baseTargetPositions[i3 + 1];
+                const bz = this.baseTargetPositions[i3 + 2];
+                this.targetPositions[i3] = bx * sx * prox;
+                this.targetPositions[i3 + 1] = by * sy * prox;
+                this.targetPositions[i3 + 2] = bz * sz * prox;
+            }
+            if (this.shapeTransition.t === 1) {
+                // Terminar transición
+                delete this.shapeTransition;
+            }
+        } else {
+            // Estado estable: asegurar targetPositions correctas (sin salto)
+            const prox = this.getProximityScale();
+            const ps = this.postureScale(this.params.posture);
+            for (let i = 0; i < this.particleCount; i++) {
+                const i3 = i * 3;
+                const bx = this.baseTargetPositions[i3];
+                const by = this.baseTargetPositions[i3 + 1];
+                const bz = this.baseTargetPositions[i3 + 2];
+                this.targetPositions[i3] = bx * ps.x * prox;
+                this.targetPositions[i3 + 1] = by * ps.y * prox;
+                this.targetPositions[i3 + 2] = bz * ps.z * prox;
+            }
         }
         const tEase = this.emotionTransitionT < 1 ? (1 - Math.cos(this.emotionTransitionT * Math.PI)) / 2 : 1; // easeInOutCosine
         const blend = (a, b) => a + (b - a) * tEase;

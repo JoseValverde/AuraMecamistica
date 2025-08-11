@@ -182,9 +182,20 @@ class AuraVisualization {
     }
     
     initAuraSystem() {
-    this.auraSystem = new AuraSystem({ sphereRadius: window.AURA_SPHERE_RADIUS });
+        const gpuReady = window.AURA_USE_GPU && window.GpuAuraSystem && window.GPUComputationRenderer;
+        if (gpuReady) {
+            try {
+                this.auraSystem = new GpuAuraSystem({ sphereRadius: window.AURA_SPHERE_RADIUS, renderer: this.renderer });
+                console.log('🧪 Modo GPU activado');
+            } catch (e) {
+                console.warn('Fallo inicializando GPU, usando CPU:', e);
+                this.auraSystem = new AuraSystem({ sphereRadius: window.AURA_SPHERE_RADIUS });
+            }
+        } else {
+            if (window.AURA_USE_GPU) console.warn('GPU no disponible, fallback CPU');
+            this.auraSystem = new AuraSystem({ sphereRadius: window.AURA_SPHERE_RADIUS });
+        }
         const particleSystem = this.auraSystem.getParticleSystem();
-        
         if (particleSystem) {
             this.scene.add(particleSystem);
             AuraUtils.debugLog('Sistema de aura añadido a la escena');
@@ -394,7 +405,11 @@ class AuraVisualization {
         }
         
         if (this.infoElements.particles) {
-            this.infoElements.particles.textContent = '2000';
+            if (this.auraSystem && typeof this.auraSystem.getParticleCount === 'function') {
+                this.infoElements.particles.textContent = this.auraSystem.getParticleCount().toString();
+            } else {
+                this.infoElements.particles.textContent = '2000';
+            }
         }
         
         if (this.auraSystem && this.infoElements.time) {

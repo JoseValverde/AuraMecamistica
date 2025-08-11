@@ -2,3 +2,4 @@
 // Declarar aquí valores compartidos para usarlos en toda la app.
 // Radio estándar de la esfera envolvente y distribución de partículas
 window.AURA_SPHERE_RADIUS = 8;
+window.AURA_USE_GPU = true; // activar modo GPU
