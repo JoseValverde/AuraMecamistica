@@ -1,19 +1,46 @@
-# Proyecto: Visualización de Aura Sensorial
+# Aura Mecaminística – Visualización Bio‑Emocional GPU
 
-## Fase de Ideación
+Experiencia visual interactiva que representa un "aura" dinámica construida con miles de partículas 3D que reaccionan a parámetros fisiológicos simbólicos (temperatura, peso, movimiento, ritmo cardíaco), estados emocionales, postura y proximidad. La simulación principal corre en la GPU mediante shaders personalizados (GPGPU) para lograr fluidez con un único draw call.
 
-### Objetivo
+---
 
-Desarrollar una experiencia visual inmersiva que represente el "aura" de una persona a partir de datos sensoriales (peso, temperatura, movimiento, etc.). Esta visualización servirá como pieza interactiva en una instalación artística y como prototipo de una posible aplicación web o móvil.
+## Estado Actual (Agosto 2025)
+
+- Motor de partículas dual: CPU (referencia) y GPU (activo por defecto).
+- Cómputo en GPU: integración de velocidad/posición con texturas flotantes (ping‑pong) y fragment shaders.
+- Perfiles emocionales con transición suave (interpolación temporal y fase acumulativa) que afectan: orbitMultiplier, ruido, amplitud y velocidad de ondas tangenciales, jitter radial, grosor de la “capa” y pulsación visual.
+- Postura y proximidad modifican la morfología (escalado anisotrópico aplicado tras reproyección parcial para evitar concentraciones en polos).
+- Warmup inicial: jitter tangencial decreciente + pre‐cómputo para dispersión homogénea (mitiga “tapas” polares).
+- Distribución inicial pseudo-uniforme (Fibonacci) con variación radial (0.65R–1.0R).
+- Reproyección parcial (mezcla adaptativa) preserva suavidad sin colapsar en polos.
+- Debug modes: color por coordenada de textura y color por normalizada de posición.
+- Mezcla aditiva controlada con corrección de luminancia para evitar saturación blanca.
+- Config flags globales en `js/config.js`.
+
+---
+
+## Objetivo Original
+
+Representar una “aura” estética, orgánica y evocadora que sirva como pieza artística y base para futura integración con sensores físicos (Arduino / TouchDesigner) o una app web.
 
 ---
 
 ## Tecnologías principales
 
-- **Three.js**: Motor de gráficos 3D en WebGL para la visualización del aura.
-- **JavaScript / HTML / CSS**: Interfaz básica para recoger datos manuales e integrarlos con la visualización.
-- **TouchDesigner** (en fases futuras): Para traducción física/sensorial en instalación real.
-- **Arduino** (futuro): Recolección de datos físicos a partir de sensores.
+- Three.js (renderizado 3D y Points GPU).
+- GLSL (vertex + fragment shaders para render y cómputo).
+- GPGPU mediante render targets flotantes (RGBA32F) y técnica ping‑pong minimalista.
+- JavaScript (gestión de estados, transición emocional, UI básica).
+- Futuro: TouchDesigner / Arduino para datos reales.
+
+### Técnicas Shader Clave
+
+- Integración de velocidad en fragment shader (rotación orbital + pseudo ruido hash + corrección radial de retorno a la cáscara).
+- Jitter tangencial controlado por emoción y fase.
+- Ondas tangenciales (dos bases ortogonales) moduladas por seed por partícula + fase emocional acumulativa.
+- Jitter radial y grosor (shellThickness) para “respiración” del aura.
+- Mezcla de reproyección: `pos = mix(pos, shellPos, factor)` con factor dependiente de warmup para evitar alineación temprana en polos.
+- Pulsación en vertex shader (sin recostear CPU) según seed y emoción.
 
 ---
 
@@ -88,17 +115,37 @@ https://drive.google.com/file/d/1H0eiNE5CJnMcSg_JH37_4DryaEYjhfWX/view?usp=shari
 ### Estructura de archivos:
 ```
 /app
-├── index.html          # Página principal
+├── index.html              # Página principal / punto de entrada
 ├── css/
-│   └── styles.css      # Estilos para la interfaz
+│   └── styles.css          # Estilos UI
 ├── js/
-│   ├── main.js         # Lógica principal y controles
-│   ├── aura-system.js  # Sistema de partículas del aura
-│   └── utils.js        # Funciones auxiliares
-└── assets/             # Recursos (si necesarios)
+│   ├── config.js           # Flags globales (AURA_SPHERE_RADIUS, AURA_USE_GPU)
+│   ├── main.js             # Inicialización, UI y bucle de animación
+│   ├── utils.js            # Funciones auxiliares (mapRange, colores, etc.)
+│   ├── aura-system.js      # Implementación CPU (referencia / fallback)
+│   ├── gpu-compute-min.js  # Mini helper de cómputo GPGPU (ping‑pong)
+│   └── gpu-aura-system.js  # Implementación GPU (simulación + render)
+└── assets/                 # Texturas / recursos (si se añaden)
 ```
 
-### Funcionalidades principales:
+### Flujo GPU (resumen)
+1. Inicialización: creación de texturas posición/velocidad (Float) con distribución Fibonacci + perturbaciones.
+2. Prewarm: varias iteraciones de compute invisibles + jitter warmup.
+3. Cada frame:
+   - Shader velocidad: integra rotación orbital, ruido hash, respiración y corrección radial.
+   - Shader posición: aplica desplazamientos tangenciales y reproyección parcial adaptativa; postureScale al final.
+   - Obtención de textura de posiciones -> vertex shader (Points).
+   - Vertex shader: samplea posición, aplica pulsación, tamaño dependiente de distancia.
+   - Fragment shader: aplica textura de punto y mezcla aditiva cuidada.
+4. Transición emocional: interpolación de perfiles y avance de fase para continuidad.
+
+### Flags / Config
+- `window.AURA_SPHERE_RADIUS` (default 8) – radio base de la esfera.
+- `window.AURA_USE_GPU = true|false` – alterna implementación.
+
+Para forzar CPU: establecer `AURA_USE_GPU = false` antes de cargar `main.js`.
+
+### Funcionalidades principales
 
 1. **Sistema de partículas nebulosas** con Three.js que puede transformarse entre:
    - Espirales cerradas/abiertas
@@ -123,10 +170,12 @@ https://drive.google.com/file/d/1H0eiNE5CJnMcSg_JH37_4DryaEYjhfWX/view?usp=shari
    - Animaciones fluidas y orgánicas
 
 4. **Características técnicas**:
-   - Responsive (se adapta al tamaño de ventana)
-   - 60 FPS suave
-   - Transiciones graduales entre estados
-   - Posibilidad de guardar configuraciones
+   - Un único draw call (Points) en modo GPU.
+   - Texturas flotantes para cómputo sin ida y vuelta CPU.
+   - Warmup y pre-cómputo para estabilidad inicial.
+   - Transiciones emocionales easing (cosine in-out) + fase continua.
+   - Debug visual conmutables (UV / posición normalizada).
+   - Preparado para integración de sensores físicos.
 
 ---
 
@@ -144,6 +193,68 @@ https://drive.google.com/file/d/1H0eiNE5CJnMcSg_JH37_4DryaEYjhfWX/view?usp=shari
 
 ## Notas adicionales
 
-- Se busca que la experiencia sea **personal, evocadora y estética**, sin caer en una lectura pseudocientífica o tecnológica fría.
-- Las auras generadas podrán guardarse y reproducirse posteriormente.
-- El proyecto puede crecer hacia una app que capture estos datos en tiempo real y genere visualizaciones interactivas personales.
+- Enfoque en estética orgánica y evocadora (no pretende validar interpretaciones esotéricas).
+- Persistencia futura: posibilidad de snapshot de parámetros + semilla para reproducir auras.
+- Extensible a multi‑usuario (fusionar volúmenes o interpolar entre perfiles).
+- Potenciales mejoras:
+   - Añadir ruido 3D real (Perlin/Simplex) con textura para campos más ricos.
+   - Dithering / tonemapping personalizado para HDR bloom moderado.
+   - Exportación de frames / secuencias.
+   - Sistema de eventos para transiciones guiadas (coreografías).
+
+---
+
+## Ejecución Rápida
+
+Abrir `index.html` en un navegador moderno (Chrome / Firefox). Si el navegador bloquea texturas flotantes en local file, servir con un pequeño servidor estático.
+
+Opcional (ejemplo con npx):
+```
+npx http-server .
+```
+Luego navegar a `http://localhost:8080/app/`.
+
+---
+
+## Créditos / Autoría
+
+Concepto y dirección creativa: jagvalverde.com
+Desarrollo visual / shaders: jagvalverde.com
+
+---
+
+## English Translation (Project Stages onward)
+
+### Project Stages
+1. Ideation & documentation (→ this document)
+2. Base visualization with manual data
+3. Simple interface for data input
+4. Visual tuning: colors, shapes and behavior
+5. Integration with real sensors (Arduino + TouchDesigner)
+6. Installation phase + projection
+7. (Optional) Web version accessible via personalized QR for each aura
+
+### Additional Notes
+- Focus on organic, evocative aesthetics (does not attempt to validate esoteric interpretations).
+- Future persistence: snapshot of parameters + seed to reproduce auras.
+- Extensible to multi‑user scenarios (merge volumes or interpolate between profiles).
+- Potential enhancements:
+   - Add real 3D noise (Perlin/Simplex) via texture for richer motion fields.
+   - Custom dithering / tonemapping for moderate HDR bloom.
+   - Frame / sequence export.
+   - Event system for guided transitions (choreographies).
+
+### Quick Run
+Open `index.html` in a modern browser (Chrome / Firefox). If the browser blocks floating-point textures via file://, serve with a small static server.
+
+Optional (example with npx):
+```
+npx http-server .
+```
+Then navigate to `http://localhost:8080/app/`.
+
+### Credits
+Creative concept & direction: jagvalverde.com
+Visual / shader development: jagvalverde.com
+
+---
